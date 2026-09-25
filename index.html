@@ -1,1 +1,841 @@
 
+<!DOCTYPE html>
+<html>
+
+<head>
+
+  <meta charset="UTF-8">
+
+  <meta
+    name="viewport"
+    content="width=device-width,
+             initial-scale=1.0"
+  >
+
+  <title>MainVC Attendance Camera</title>
+
+  <style>
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      padding: 20px;
+      min-height: 100vh;
+
+      font-family:
+        Arial,
+        sans-serif;
+
+      background: #f2f6f8;
+
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .container {
+
+      width: 100%;
+      max-width: 450px;
+
+      background: white;
+
+      padding: 25px;
+
+      border-radius: 20px;
+
+      box-shadow:
+        0 4px 20px
+        rgba(0,0,0,0.15);
+
+      text-align: center;
+    }
+
+    h2 {
+      margin-top: 0;
+      color: #00695c;
+    }
+
+    .employee {
+      color: #555;
+      margin-bottom: 15px;
+    }
+
+    .camera-wrapper {
+
+      width: 280px;
+      height: 280px;
+
+      margin: 20px auto;
+
+      border-radius: 50%;
+
+      overflow: hidden;
+
+      background: #111;
+
+      border: 5px solid #00897b;
+
+      position: relative;
+    }
+
+    #video {
+
+      width: 100%;
+      height: 100%;
+
+      object-fit: cover;
+
+      transform: scaleX(-1);
+    }
+
+    .preview-wrapper {
+
+      width: 280px;
+      height: 280px;
+
+      margin: 20px auto;
+
+      border-radius: 50%;
+
+      overflow: hidden;
+
+      background: #111;
+
+      border: 5px solid #2e7d32;
+    }
+
+    #preview {
+
+      width: 100%;
+      height: 100%;
+
+      object-fit: cover;
+    }
+
+    button {
+
+      width: 100%;
+
+      padding: 14px;
+
+      margin-top: 12px;
+
+      border: none;
+
+      border-radius: 10px;
+
+      color: white;
+
+      font-size: 16px;
+
+      font-weight: bold;
+
+      cursor: pointer;
+    }
+
+    button:disabled {
+      background: #aaa;
+    }
+
+    #captureButton {
+      background: #00897b;
+    }
+
+    #recaptureButton {
+      background: #ef6c00;
+    }
+
+    #usePhotoButton {
+      background: #2e7d32;
+    }
+
+    #startButton {
+      background: #1565c0;
+    }
+
+    .button-row {
+
+      display: flex;
+
+      gap: 10px;
+    }
+
+    .button-row button {
+      flex: 1;
+    }
+
+    .status {
+
+      margin-top: 15px;
+
+      padding: 12px;
+
+      border-radius: 10px;
+
+      font-size: 14px;
+    }
+
+    .info {
+      background: #e3f2fd;
+      color: #1565c0;
+    }
+
+    .error {
+      background: #ffebee;
+      color: #c62828;
+    }
+
+    .success {
+      background: #e8f5e9;
+      color: #2e7d32;
+    }
+
+    .note {
+
+      font-size: 13px;
+
+      color: #777;
+
+      line-height: 1.5;
+
+      margin-bottom: 10px;
+    }
+
+    #cameraSection,
+    #previewSection {
+      display: none;
+    }
+
+  </style>
+
+</head>
+
+
+<body>
+
+
+<div class="container">
+
+  <h2>📸 Attendance Selfie</h2>
+
+  <div
+    id="employeeText"
+    class="employee"
+  >
+    Please wait...
+  </div>
+
+
+  <!-- ==============================
+       CAMERA
+       ============================== -->
+
+  <div id="cameraSection">
+
+    <div class="note">
+
+      Keep your face clearly visible
+      and try to keep the camp building
+      in the background.
+
+    </div>
+
+
+    <div class="camera-wrapper">
+
+      <video
+        id="video"
+        autoplay
+        playsinline
+        muted
+      ></video>
+
+    </div>
+
+
+    <button
+      id="captureButton"
+      onclick="capturePhoto()"
+    >
+      📸 CAPTURE
+    </button>
+
+  </div>
+
+
+  <!-- ==============================
+       PREVIEW
+       ============================== -->
+
+  <div id="previewSection">
+
+    <div class="note">
+      Check your selfie before submitting.
+    </div>
+
+
+    <div class="preview-wrapper">
+
+      <img
+        id="preview"
+        alt="Selfie Preview"
+      >
+
+    </div>
+
+
+    <div class="button-row">
+
+      <button
+        id="recaptureButton"
+        onclick="recapturePhoto()"
+      >
+        🔄 RECAPTURE
+      </button>
+
+
+      <button
+        id="usePhotoButton"
+        onclick="usePhoto()"
+      >
+        ✓ USE THIS PHOTO
+      </button>
+
+    </div>
+
+  </div>
+
+
+  <div
+    id="status"
+    class="status info"
+  >
+    Opening camera...
+  </div>
+
+
+  <canvas
+    id="canvas"
+    style="display:none;"
+  ></canvas>
+
+</div>
+
+
+<script>
+
+let cameraStream = null;
+
+let capturedImage = null;
+
+
+/*
+ * ======================================
+ * READ URL PARAMETERS
+ * ======================================
+ */
+
+const params =
+  new URLSearchParams(
+    window.location.search
+  );
+
+
+const employeeId =
+  params.get("id") || "";
+
+
+const employeeName =
+  params.get("name") || "";
+
+
+const returnOrigin =
+  params.get("origin") || "";
+
+
+/*
+ * ======================================
+ * DISPLAY EMPLOYEE
+ * ======================================
+ */
+
+document
+  .getElementById("employeeText")
+  .innerText =
+    employeeName
+      ? employeeId +
+        " • " +
+        employeeName
+      : "Attendance Selfie";
+
+
+/*
+ * ======================================
+ * START CAMERA
+ * ======================================
+ */
+
+async function startCamera() {
+
+  if (
+    !navigator.mediaDevices ||
+    !navigator.mediaDevices.getUserMedia
+  ) {
+
+    showStatus(
+      "Camera is not supported by this browser.",
+      "error"
+    );
+
+    return;
+  }
+
+
+  try {
+
+    showStatus(
+      "Requesting camera permission...",
+      "info"
+    );
+
+
+    cameraStream =
+      await navigator.mediaDevices
+        .getUserMedia({
+
+          video: {
+
+            facingMode: "user",
+
+            width: {
+              ideal: 720
+            },
+
+            height: {
+              ideal: 720
+            }
+
+          },
+
+          audio: false
+
+        });
+
+
+    const video =
+      document.getElementById(
+        "video"
+      );
+
+
+    video.srcObject =
+      cameraStream;
+
+
+    document
+      .getElementById(
+        "cameraSection"
+      )
+      .style.display =
+      "block";
+
+
+    showStatus(
+      "Camera ready. Take your selfie.",
+      "success"
+    );
+
+  }
+
+  catch (error) {
+
+    console.error(error);
+
+    showStatus(
+      "Camera access was denied or unavailable. Please allow camera permission and reload this page.",
+      "error"
+    );
+
+  }
+
+}
+
+
+/*
+ * ======================================
+ * CAPTURE
+ * ======================================
+ */
+
+function capturePhoto() {
+
+  const video =
+    document.getElementById(
+      "video"
+    );
+
+  const canvas =
+    document.getElementById(
+      "canvas"
+    );
+
+
+  if (
+    !video.videoWidth ||
+    !video.videoHeight
+  ) {
+
+    showStatus(
+      "Camera is not ready.",
+      "error"
+    );
+
+    return;
+  }
+
+
+  const maxSize =
+    800;
+
+  let width =
+    video.videoWidth;
+
+  let height =
+    video.videoHeight;
+
+
+  if (width > height) {
+
+    if (width > maxSize) {
+
+      height =
+        Math.round(
+          height *
+          maxSize /
+          width
+        );
+
+      width =
+        maxSize;
+
+    }
+
+  }
+
+  else {
+
+    if (height > maxSize) {
+
+      width =
+        Math.round(
+          width *
+          maxSize /
+          height
+        );
+
+      height =
+        maxSize;
+
+    }
+
+  }
+
+
+  canvas.width =
+    width;
+
+  canvas.height =
+    height;
+
+
+  const context =
+    canvas.getContext("2d");
+
+
+  /*
+   * Mirror selfie
+   */
+
+  context.save();
+
+  context.translate(
+    width,
+    0
+  );
+
+  context.scale(
+    -1,
+    1
+  );
+
+
+  context.drawImage(
+    video,
+    0,
+    0,
+    width,
+    height
+  );
+
+
+  context.restore();
+
+
+  /*
+   * JPEG compression
+   */
+
+  capturedImage =
+    canvas.toDataURL(
+      "image/jpeg",
+      0.70
+    );
+
+
+  document
+    .getElementById(
+      "preview"
+    )
+    .src =
+    capturedImage;
+
+
+  stopCamera();
+
+
+  document
+    .getElementById(
+      "cameraSection"
+    )
+    .style.display =
+    "none";
+
+
+  document
+    .getElementById(
+      "previewSection"
+    )
+    .style.display =
+    "block";
+
+
+  showStatus(
+    "Please check your photo.",
+    "info"
+  );
+
+}
+
+
+/*
+ * ======================================
+ * RECAPTURE
+ * ======================================
+ */
+
+function recapturePhoto() {
+
+  capturedImage =
+    null;
+
+
+  document
+    .getElementById(
+      "previewSection"
+    )
+    .style.display =
+    "none";
+
+
+  startCamera();
+
+}
+
+
+/*
+ * ======================================
+ * USE PHOTO
+ * ======================================
+ */
+
+function usePhoto() {
+
+  if (!capturedImage) {
+
+    showStatus(
+      "No photo captured.",
+      "error"
+    );
+
+    return;
+  }
+
+
+  showStatus(
+    "Sending photo to attendance system...",
+    "info"
+  );
+
+
+  /*
+   * Send selfie back to the
+   * Apps Script parent window.
+   */
+
+  if (
+    window.opener &&
+    returnOrigin
+  ) {
+
+    window.opener.postMessage(
+
+      {
+        type:
+          "MAINVC_ATTENDANCE_SELFIE",
+
+        employeeId:
+          employeeId,
+
+        employeeName:
+          employeeName,
+
+        image:
+          capturedImage
+      },
+
+      returnOrigin
+
+    );
+
+
+    showStatus(
+      "✓ Photo accepted. Returning to attendance...",
+      "success"
+    );
+
+
+    setTimeout(
+      function() {
+
+        window.close();
+
+      },
+      800
+    );
+
+  }
+
+  else {
+
+    showStatus(
+      "Unable to return photo to attendance system.",
+      "error"
+    );
+
+  }
+
+}
+
+
+/*
+ * ======================================
+ * STOP CAMERA
+ * ======================================
+ */
+
+function stopCamera() {
+
+  if (cameraStream) {
+
+    cameraStream
+      .getTracks()
+      .forEach(
+        function(track) {
+
+          track.stop();
+
+        }
+      );
+
+
+    cameraStream =
+      null;
+  }
+
+
+  const video =
+    document.getElementById(
+      "video"
+    );
+
+
+  if (video) {
+
+    video.srcObject =
+      null;
+
+  }
+
+}
+
+
+/*
+ * ======================================
+ * STATUS
+ * ======================================
+ */
+
+function showStatus(
+  message,
+  type
+) {
+
+  const status =
+    document.getElementById(
+      "status"
+    );
+
+
+  status.innerText =
+    message;
+
+
+  status.className =
+    "status " + type;
+
+}
+
+
+/*
+ * ======================================
+ * CLEANUP
+ * ======================================
+ */
+
+window.addEventListener(
+  "beforeunload",
+  function() {
+
+    stopCamera();
+
+  }
+);
+
+
+/*
+ * ======================================
+ * START
+ * ======================================
+ */
+
+startCamera();
+
+</script>
+
+</body>
+
+</html>
